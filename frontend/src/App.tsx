@@ -207,7 +207,7 @@ function CreateScreen({
   }
 
   return (
-    <section className="content-band content-band--narrow">
+    <section className="content-band create-screen">
       <div className="section-heading">
         <span>
           <p className="eyebrow">Create</p>
@@ -217,40 +217,54 @@ function CreateScreen({
           Back
         </button>
       </div>
-      <form className="create-form panel" onSubmit={submit}>
-        <label htmlFor="sourceFileName">Source file name</label>
-        <input
-          id="sourceFileName"
-          onChange={(event) => setSourceFileName(event.target.value)}
-          value={sourceFileName}
-        />
-        <label htmlFor="lectureText">Lecture text</label>
-        <textarea
-          id="lectureText"
-          onChange={(event) => setLectureText(event.target.value)}
-          rows={8}
-          value={lectureText}
-        />
-        {demoState === 'loading' && (
-          <div className="state-panel state-panel--loading">
-            <span className="loader" />
-            <strong>Generating a baby guinea pig</strong>
+      <div className="create-layout">
+        <aside className="create-preview panel">
+          <GuineaPigVisual mood="idle" />
+          <div>
+            <p className="eyebrow">New study pet</p>
+            <h2>One lecture becomes one guinea pig.</h2>
+            <p>
+              Paste lecture text for now. The backend will create a baby guinea pig and
+              five starter quizzes from this material.
+            </p>
           </div>
-        )}
-        {demoState === 'error' && (
-          <div className="state-panel state-panel--error">
-            <strong>Could not create guinea pig</strong>
-            <p>Lecture text must be at least 20 characters.</p>
-          </div>
-        )}
-        <button
-          className="primary-button"
-          type="submit"
-          disabled={!sourceFileName.trim() || lectureText.trim().length < 20 || demoState === 'loading'}
-        >
-          Create
-        </button>
-      </form>
+        </aside>
+
+        <form className="create-form panel" onSubmit={submit}>
+          <label htmlFor="sourceFileName">Source file name</label>
+          <input
+            id="sourceFileName"
+            onChange={(event) => setSourceFileName(event.target.value)}
+            value={sourceFileName}
+          />
+          <label htmlFor="lectureText">Lecture text</label>
+          <textarea
+            id="lectureText"
+            onChange={(event) => setLectureText(event.target.value)}
+            rows={10}
+            value={lectureText}
+          />
+          {demoState === 'loading' && (
+            <div className="state-panel state-panel--loading">
+              <span className="loader" />
+              <strong>Generating a baby guinea pig</strong>
+            </div>
+          )}
+          {demoState === 'error' && (
+            <div className="state-panel state-panel--error">
+              <strong>Could not create guinea pig</strong>
+              <p>Lecture text must be at least 20 characters.</p>
+            </div>
+          )}
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={!sourceFileName.trim() || lectureText.trim().length < 20 || demoState === 'loading'}
+          >
+            Create
+          </button>
+        </form>
+      </div>
     </section>
   )
 }
@@ -432,7 +446,7 @@ function App() {
     try {
       const result = await createGuineaPig({ userId: user.id, sourceFileName, lectureText })
       setActiveRecord(result)
-      setSelectedQuizId(result.quizzes[0]?.id ?? null)
+      setSelectedQuizId(null)
       await loadDashboard(user.id)
       setDemoState('ready')
       setScreen('detail')
@@ -449,7 +463,7 @@ function App() {
     try {
       const [guineaPig, quizzes] = await Promise.all([getGuineaPig(id), getQuizzes(id)])
       setActiveRecord({ guineaPig, quizzes })
-      setSelectedQuizId(quizzes[0]?.id ?? null)
+      setSelectedQuizId(null)
       setDemoState('ready')
       setScreen('detail')
     } catch (error) {
