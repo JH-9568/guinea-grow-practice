@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import './App.css'
+import { GuineaPigAvatar } from './components/GuineaPigAvatar'
 import {
   answerQuiz,
   createGuineaPig,
@@ -40,26 +41,6 @@ function getQuizStatusLabel(status: Quiz['status']) {
   if (status === 'correct') return '정답'
   if (status === 'wrong') return '오답'
   return '미풀이'
-}
-
-function GuineaPigVisual({ mood }: { mood: GuineaPig['mood'] }) {
-  return (
-    <div className={`pet-preview pet-preview--${mood}`} aria-label={`기니피그 상태: ${getMoodLabel(mood)}`}>
-      <div className="pet-preview__halo" />
-      <div className="pet">
-        <div className="pet__ear pet__ear--left" />
-        <div className="pet__ear pet__ear--right" />
-        <div className="pet__face">
-          <span className="pet__eye" />
-          <span className="pet__eye" />
-          <span className="pet__mouth" />
-        </div>
-        <div className="pet__belly" />
-        {(mood === 'happy' || mood === 'levelup') && <div className="hay" aria-hidden="true" />}
-      </div>
-      <div className="pet-preview__surface" />
-    </div>
-  )
 }
 
 function XpBar({ xp }: { xp: number }) {
@@ -126,7 +107,7 @@ function StartScreen({
           )}
         </form>
       </div>
-      <GuineaPigVisual mood="idle" />
+      <GuineaPigAvatar level={1} mood="idle" personality="hungry" xp={0} />
     </section>
   )
 }
@@ -189,7 +170,16 @@ function DashboardScreen({
               type="button"
               onClick={() => onOpenPig(summary.id)}
             >
-              <span className="pig-card__avatar" aria-hidden="true" />
+              <span className="pig-card__avatar" aria-hidden="true">
+                <GuineaPigAvatar
+                  color={summary.color}
+                  compact
+                  level={summary.level}
+                  mood={summary.mood}
+                  personality={summary.personality}
+                  xp={summary.xp}
+                />
+              </span>
               <span>
                 <strong>{summary.name}</strong>
                 <small>{summary.sourceFileName}</small>
@@ -239,7 +229,7 @@ function CreateScreen({
       </div>
       <div className="create-layout">
         <aside className="create-preview panel">
-          <GuineaPigVisual mood="idle" />
+          <GuineaPigAvatar level={1} mood="idle" personality="shy" xp={0} />
           <div>
             <p className="eyebrow">새 공부 펫</p>
             <h2>강의 하나가 기니피그 한 마리가 됩니다.</h2>
@@ -311,7 +301,13 @@ function DetailScreen({
         <button className="text-button" type="button" onClick={onBack}>
           대시보드로 돌아가기
         </button>
-        <GuineaPigVisual mood={guineaPig.mood} />
+        <GuineaPigAvatar
+          color={guineaPig.color}
+          level={guineaPig.level}
+          mood={guineaPig.mood}
+          personality={guineaPig.personality}
+          xp={guineaPig.xp}
+        />
         <div className="pet-copy">
           <p className="eyebrow">{guineaPig.sourceFileName}</p>
           <h1>{guineaPig.name}</h1>
