@@ -50,12 +50,22 @@ type Quiz = {
   selectedIndex: number | null
 }
 
+type GeneratedQuiz = {
+  question: string
+  choices: string[]
+  answerIndex: number
+  explanation: string
+}
+
 const app = express()
 const port = Number(process.env.PORT ?? 3000)
+const openAiApiKey = process.env.OPENAI_API_KEY
+const openAiModel = process.env.OPENAI_MODEL ?? 'gpt-5-mini'
 
 const users = new Map<string, User>()
 const guineaPigs = new Map<string, GuineaPig>()
 const quizzes = new Map<string, Quiz>()
+const lectureTexts = new Map<string, string>()
 
 let userSequence = 1
 let pigSequence = 1
@@ -106,7 +116,7 @@ app.get('/api/guinea-pigs', (request, response) => {
   sendSuccess(response, data)
 })
 
-app.post('/api/guinea-pigs', (request, response) => {
+app.post('/api/guinea-pigs', async (request, response) => {
   const userId = stringField(request.body, 'userId')
   const sourceFileName = stringField(request.body, 'sourceFileName')
   const lectureText = stringField(request.body, 'lectureText')
@@ -132,9 +142,10 @@ app.post('/api/guinea-pigs', (request, response) => {
   }
 
   const guineaPig = createGuineaPig(userId, sourceFileName, lectureText)
-  const generatedQuizzes = generateQuizzes(guineaPig.id, lectureText, 5)
+  const generatedQuizzes = await generateQuizzes(guineaPig.id, lectureText, 5)
 
   guineaPigs.set(guineaPig.id, guineaPig)
+  lectureTexts.set(guineaPig.id, lectureText)
   generatedQuizzes.forEach((quiz) => quizzes.set(quiz.id, quiz))
 
   sendSuccess(response, {
@@ -163,7 +174,7 @@ app.get('/api/guinea-pigs/:id/quizzes', (request, response) => {
   sendSuccess(response, getQuizzesForPig(request.params.id))
 })
 
-app.post('/api/guinea-pigs/:id/quizzes/generate', (request, response) => {
+app.post('/api/guinea-pigs/:id/quizzes/generate', async (request, response) => {
   const guineaPig = guineaPigs.get(request.params.id)
 
   if (!guineaPig) {
@@ -173,7 +184,8 @@ app.post('/api/guinea-pigs/:id/quizzes/generate', (request, response) => {
 
   const rawCount = request.body?.count
   const count = Number.isInteger(rawCount) && rawCount > 0 ? Math.min(rawCount, 20) : 5
-  const generatedQuizzes = generateQuizzes(guineaPig.id, guineaPig.sourceFileName, count)
+  const lectureText = lectureTexts.get(guineaPig.id) ?? guineaPig.sourceFileName
+  const generatedQuizzes = await generateQuizzes(guineaPig.id, lectureText, count)
   generatedQuizzes.forEach((quiz) => quizzes.set(quiz.id, quiz))
 
   sendSuccess(response, {
@@ -290,24 +302,171 @@ function createGuineaPig(userId: string, sourceFileName: string, lectureText: st
   }
 }
 
-function generateQuizzes(guineaPigId: string, lectureText: string, count: number): Quiz[] {
+async function generateQuizzes(guineaPigId: string, lectureText: string, count: number): Promise<Quiz[]> {
+  const generatedQuizzes = await generateAiQuizzes(lectureText, count).catch(() => null)
+
+  if (generatedQuizzes) {
+    return generatedQuizzes.map((quiz) => createQuiz(guineaPigId, quiz))
+  }
+
+  return generateMockQuizzes(guineaPigId, lectureText, count)
+}
+
+function generateMockQuizzes(guineaPigId: string, lectureText: string, count: number): Quiz[] {
   const topic = extractTopic(lectureText)
+  const subject = `${topic}${subjectParticle(topic)}`
+  const object = `${topic}${objectParticle(topic)}`
 
   return Array.from({ length: count }, (_unused, index) => ({
     id: `quiz_${quizSequence++}`,
     guineaPigId,
-    question: index === 0 ? `${topic}은 무엇인가요?` : `${topic}을 가장 잘 설명한 답은 무엇인가요?`,
+    question: index === 0 ? `${subject} 무엇인가요?` : `${object} 가장 잘 설명한 답은 무엇인가요?`,
     choices: [
-      `${topic}은 이 강의 자료의 핵심 개념입니다.`,
-      `${topic}은 저장 장치의 한 종류입니다.`,
-      `${topic}은 로그인 방식입니다.`,
-      `${topic}은 이 강의와 관련이 없습니다.`,
+      `${subject} 이 강의 자료의 핵심 개념입니다.`,
+      `${subject} 저장 장치의 한 종류입니다.`,
+      `${subject} 로그인 방식입니다.`,
+      `${subject} 이 강의와 관련이 없습니다.`,
     ],
     answerIndex: 0,
-    explanation: `mock 퀴즈 생성기가 강의 텍스트에서 "${topic}"을 핵심 표현으로 선택했습니다.`,
+    explanation: `mock 퀴즈 생성기가 강의 텍스트에서 "${topic}"${objectParticle(topic)} 핵심 표현으로 선택했습니다.`,
     status: 'unsolved',
     selectedIndex: null,
   }))
+}
+
+async function generateAiQuizzes(lectureText: string, count: number): Promise<GeneratedQuiz[] | null> {
+  if (!openAiApiKey) return null
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${openAiApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: openAiModel,
+      instructions:
+        'You generate Korean multiple-choice study quizzes from lecture notes. Return only data matching the JSON schema.',
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: `다음 강의 자료를 바탕으로 객관식 퀴즈 ${count}개를 만들어줘. 각 문항은 선택지 4개, 정답 인덱스, 짧은 해설을 포함해야 해.\n\n${lectureText}`,
+            },
+          ],
+        },
+      ],
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'lecture_quizzes',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['quizzes'],
+            properties: {
+              quizzes: {
+                type: 'array',
+                minItems: count,
+                maxItems: count,
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['question', 'choices', 'answerIndex', 'explanation'],
+                  properties: {
+                    question: { type: 'string' },
+                    choices: {
+                      type: 'array',
+                      minItems: 4,
+                      maxItems: 4,
+                      items: { type: 'string' },
+                    },
+                    answerIndex: {
+                      type: 'integer',
+                      minimum: 0,
+                      maximum: 3,
+                    },
+                    explanation: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  })
+
+  if (!response.ok) return null
+
+  const payload = await response.json()
+  const outputText = extractResponseText(payload)
+  if (!outputText) return null
+
+  const parsed = JSON.parse(outputText) as unknown
+  if (!isRecord(parsed) || !Array.isArray(parsed.quizzes)) return null
+
+  const generatedQuizzes = parsed.quizzes
+    .map(toGeneratedQuiz)
+    .filter((quiz): quiz is GeneratedQuiz => quiz !== null)
+
+  return generatedQuizzes.length === count ? generatedQuizzes : null
+}
+
+function createQuiz(guineaPigId: string, quiz: GeneratedQuiz): Quiz {
+  return {
+    id: `quiz_${quizSequence++}`,
+    guineaPigId,
+    question: quiz.question,
+    choices: quiz.choices,
+    answerIndex: quiz.answerIndex,
+    explanation: quiz.explanation,
+    status: 'unsolved',
+    selectedIndex: null,
+  }
+}
+
+function toGeneratedQuiz(value: unknown): GeneratedQuiz | null {
+  if (!isRecord(value)) return null
+  const question = value.question
+  const choices = value.choices
+  const answerIndex = value.answerIndex
+  const explanation = value.explanation
+
+  if (typeof question !== 'string' || !question.trim()) return null
+  if (!Array.isArray(choices) || choices.length !== 4) return null
+  if (!choices.every((choice) => typeof choice === 'string' && choice.trim())) return null
+  if (typeof answerIndex !== 'number' || !Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) {
+    return null
+  }
+  if (typeof explanation !== 'string' || !explanation.trim()) return null
+
+  return {
+    question: question.trim(),
+    choices: choices.map((choice) => choice.trim()),
+    answerIndex,
+    explanation: explanation.trim(),
+  }
+}
+
+function extractResponseText(payload: unknown): string | null {
+  if (!isRecord(payload)) return null
+  if (typeof payload.output_text === 'string') return payload.output_text
+  if (!Array.isArray(payload.output)) return null
+
+  for (const outputItem of payload.output) {
+    if (!isRecord(outputItem) || !Array.isArray(outputItem.content)) continue
+
+    for (const contentItem of outputItem.content) {
+      if (!isRecord(contentItem)) continue
+      if (typeof contentItem.text === 'string') return contentItem.text
+    }
+  }
+
+  return null
 }
 
 function toGuineaPigSummary(guineaPig: GuineaPig): GuineaPigSummary {
@@ -337,7 +496,25 @@ function extractTopic(lectureText: string): string {
     .split(/\s+/)
     .find((word) => word.length > 3)
 
-  return firstKeyword ?? 'a lecture concept'
+  return firstKeyword?.replace(/(은|는|이|가|을|를|와|과|로|으로|에|에서)$/, '') ?? '강의 개념'
+}
+
+function subjectParticle(value: string): '은' | '는' {
+  return hasFinalConsonant(value) ? '은' : '는'
+}
+
+function objectParticle(value: string): '을' | '를' {
+  return hasFinalConsonant(value) ? '을' : '를'
+}
+
+function hasFinalConsonant(value: string): boolean {
+  const lastCode = value.charCodeAt(value.length - 1)
+  const hangulStart = 0xac00
+  const hangulEnd = 0xd7a3
+
+  if (lastCode < hangulStart || lastCode > hangulEnd) return false
+
+  return (lastCode - hangulStart) % 28 !== 0
 }
 
 function stringField(body: unknown, fieldName: string): string | null {
