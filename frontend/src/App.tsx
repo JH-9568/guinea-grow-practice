@@ -22,9 +22,29 @@ type PigRecord = {
   quizzes: Quiz[]
 }
 
+function getStageLabel(stage: GuineaPig['stage']) {
+  if (stage === 'adult') return '어른'
+  if (stage === 'teen') return '청소년'
+  if (stage === 'child') return '어린이'
+  return '아기'
+}
+
+function getMoodLabel(mood: GuineaPig['mood']) {
+  if (mood === 'happy') return '행복'
+  if (mood === 'sad') return '시무룩'
+  if (mood === 'levelup') return '레벨업'
+  return '평온'
+}
+
+function getQuizStatusLabel(status: Quiz['status']) {
+  if (status === 'correct') return '정답'
+  if (status === 'wrong') return '오답'
+  return '미풀이'
+}
+
 function GuineaPigVisual({ mood }: { mood: GuineaPig['mood'] }) {
   return (
-    <div className={`pet-preview pet-preview--${mood}`} aria-label={`Guinea pig mood: ${mood}`}>
+    <div className={`pet-preview pet-preview--${mood}`} aria-label={`기니피그 상태: ${getMoodLabel(mood)}`}>
       <div className="pet-preview__halo" />
       <div className="pet">
         <div className="pet__ear pet__ear--left" />
@@ -79,28 +99,28 @@ function StartScreen({
     <section className="hero-tile">
       <div className="hero-tile__copy">
         <p className="eyebrow">GuineaGrow</p>
-        <h1>Turn lecture notes into a guinea pig you can grow.</h1>
+        <h1>강의 노트를 성장하는 기니피그로 바꿔보세요.</h1>
         <p>
-          Start with a nickname, create a guinea pig from lecture text, then raise it by
-          solving mock quizzes.
+          닉네임으로 시작하고, 강의 텍스트로 기니피그를 만든 뒤 퀴즈를 풀며
+          키워보세요.
         </p>
         <form className="start-form" onSubmit={submit}>
-          <label htmlFor="nickname">Nickname</label>
+          <label htmlFor="nickname">닉네임</label>
           <div className="input-row">
             <input
               id="nickname"
               maxLength={30}
               onChange={(event) => setNickname(event.target.value)}
-              placeholder="Jinhyung"
+              placeholder="예: 지니"
               value={nickname}
             />
             <button className="primary-button" type="submit" disabled={!nickname.trim()}>
-              {appState === 'loading' ? 'Starting' : 'Start'}
+              {appState === 'loading' ? '시작 중' : '시작하기'}
             </button>
           </div>
           {appState === 'error' && errorMessage && (
             <div className="state-panel state-panel--error">
-              <strong>Could not start</strong>
+              <strong>시작할 수 없어요</strong>
               <p>{errorMessage}</p>
             </div>
           )}
@@ -130,34 +150,34 @@ function DashboardScreen({
     <section className="content-band">
       <div className="section-heading">
         <span>
-          <p className="eyebrow">Dashboard</p>
-          <h1>{user.nickname}&apos;s guinea pigs</h1>
+          <p className="eyebrow">대시보드</p>
+          <h1>{user.nickname}님의 기니피그</h1>
         </span>
         <button className="primary-button" type="button" onClick={onCreate}>
-          Create Guinea Pig
+          기니피그 만들기
         </button>
       </div>
 
       {appState === 'loading' && (
         <div className="state-panel state-panel--loading">
           <span className="loader" />
-          <strong>Loading guinea pigs</strong>
+          <strong>기니피그를 불러오는 중</strong>
         </div>
       )}
 
       {appState === 'error' && errorMessage && (
         <div className="state-panel state-panel--error">
-          <strong>Could not load dashboard</strong>
+          <strong>대시보드를 불러올 수 없어요</strong>
           <p>{errorMessage}</p>
         </div>
       )}
 
       {appState !== 'loading' && summaries.length === 0 ? (
         <div className="state-panel state-panel--large">
-          <strong>No guinea pigs yet</strong>
-          <p>Create your first study pet from a file name and lecture text.</p>
+          <strong>아직 기니피그가 없어요</strong>
+          <p>강의 파일명과 강의 텍스트로 첫 공부 펫을 만들어보세요.</p>
           <button className="secondary-button" type="button" onClick={onCreate}>
-            Create first guinea pig
+            첫 기니피그 만들기
           </button>
         </div>
       ) : (
@@ -175,7 +195,7 @@ function DashboardScreen({
                 <small>{summary.sourceFileName}</small>
               </span>
               <span className="pig-card__stats">
-                Lv. {summary.level} · {summary.stage} · {summary.unsolvedQuizCount} unsolved
+                Lv. {summary.level} · {getStageLabel(summary.stage)} · 미풀이 {summary.unsolvedQuizCount}개
               </span>
             </button>
           ))}
@@ -194,7 +214,7 @@ function CreateScreen({
   onBack: () => void
   onCreate: (sourceFileName: string, lectureText: string) => void
 }) {
-  const [sourceFileName, setSourceFileName] = useState('Operating Systems Lecture 1.pdf')
+  const [sourceFileName, setSourceFileName] = useState('운영체제 1강.pdf')
   const [lectureText, setLectureText] = useState(
     'A process is a program in execution. Threads are lightweight units of execution within a process. The operating system schedules processes and manages memory.',
   )
@@ -210,34 +230,34 @@ function CreateScreen({
     <section className="content-band create-screen">
       <div className="section-heading">
         <span>
-          <p className="eyebrow">Create</p>
-          <h1>Create a guinea pig from lecture material.</h1>
+          <p className="eyebrow">생성</p>
+          <h1>강의 자료로 기니피그를 만들어요.</h1>
         </span>
         <button className="secondary-button" type="button" onClick={onBack}>
-          Back
+          돌아가기
         </button>
       </div>
       <div className="create-layout">
         <aside className="create-preview panel">
           <GuineaPigVisual mood="idle" />
           <div>
-            <p className="eyebrow">New study pet</p>
-            <h2>One lecture becomes one guinea pig.</h2>
+            <p className="eyebrow">새 공부 펫</p>
+            <h2>강의 하나가 기니피그 한 마리가 됩니다.</h2>
             <p>
-              Paste lecture text for now. The backend will create a baby guinea pig and
-              five starter quizzes from this material.
+              지금은 강의 텍스트를 붙여넣어 시작합니다. 백엔드가 아기 기니피그와
+              시작 퀴즈 5개를 만들어줍니다.
             </p>
           </div>
         </aside>
 
         <form className="create-form panel" onSubmit={submit}>
-          <label htmlFor="sourceFileName">Source file name</label>
+          <label htmlFor="sourceFileName">자료 파일명</label>
           <input
             id="sourceFileName"
             onChange={(event) => setSourceFileName(event.target.value)}
             value={sourceFileName}
           />
-          <label htmlFor="lectureText">Lecture text</label>
+          <label htmlFor="lectureText">강의 텍스트</label>
           <textarea
             id="lectureText"
             onChange={(event) => setLectureText(event.target.value)}
@@ -247,22 +267,22 @@ function CreateScreen({
           {demoState === 'loading' && (
             <div className="state-panel state-panel--loading">
               <span className="loader" />
-              <strong>Generating a baby guinea pig</strong>
+              <strong>아기 기니피그를 만드는 중</strong>
             </div>
           )}
           {demoState === 'error' && (
             <div className="state-panel state-panel--error">
-              <strong>Could not create guinea pig</strong>
-              <p>Lecture text must be at least 20 characters.</p>
+              <strong>기니피그를 만들 수 없어요</strong>
+              <p>강의 텍스트는 최소 20자 이상이어야 합니다.</p>
             </div>
           )}
           <button
             className="primary-button"
             type="submit"
-            disabled={!sourceFileName.trim() || lectureText.trim().length < 20 || demoState === 'loading'}
-          >
-            Create
-          </button>
+          disabled={!sourceFileName.trim() || lectureText.trim().length < 20 || demoState === 'loading'}
+        >
+          만들기
+        </button>
         </form>
       </div>
     </section>
@@ -289,7 +309,7 @@ function DetailScreen({
     <section className="detail-layout">
       <aside className="panel pet-panel">
         <button className="text-button" type="button" onClick={onBack}>
-          Back to dashboard
+          대시보드로 돌아가기
         </button>
         <GuineaPigVisual mood={guineaPig.mood} />
         <div className="pet-copy">
@@ -298,9 +318,9 @@ function DetailScreen({
           <p>{getMoodMessage(guineaPig.mood)}</p>
         </div>
         <div className="stat-grid">
-          <span>Level <strong>{guineaPig.level}</strong></span>
-          <span>Stage <strong>{guineaPig.stage}</strong></span>
-          <span>Mood <strong>{guineaPig.mood}</strong></span>
+          <span>레벨 <strong>{guineaPig.level}</strong></span>
+          <span>성장 단계 <strong>{getStageLabel(guineaPig.stage)}</strong></span>
+          <span>기분 <strong>{getMoodLabel(guineaPig.mood)}</strong></span>
         </div>
         <XpBar xp={guineaPig.xp} />
       </aside>
@@ -308,11 +328,11 @@ function DetailScreen({
       <main className="panel quiz-panel">
         <div className="panel__heading">
           <span>
-            <p className="eyebrow">Quiz list</p>
-            <h1>{solvedCount}/{quizzes.length} solved</h1>
+            <p className="eyebrow">퀴즈 목록</p>
+            <h1>{solvedCount}/{quizzes.length}개 풀이 완료</h1>
           </span>
           <button className="secondary-button" type="button" onClick={onGenerateMore}>
-            Generate More Quizzes
+            퀴즈 더 만들기
           </button>
         </div>
         <div className="quiz-list">
@@ -324,10 +344,12 @@ function DetailScreen({
               onClick={() => onOpenQuiz(quiz)}
             >
               <span>
-                <strong>Quiz {index + 1}</strong>
+                <strong>퀴즈 {index + 1}</strong>
                 <small>{quiz.question}</small>
               </span>
-              <span className={`status-badge status-badge--${quiz.status}`}>{quiz.status}</span>
+              <span className={`status-badge status-badge--${quiz.status}`}>
+                {getQuizStatusLabel(quiz.status)}
+              </span>
             </button>
           ))}
         </div>
@@ -352,11 +374,11 @@ function QuizModal({
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="quiz-title">
         <div className="panel__heading">
           <span>
-            <p className="eyebrow">Quiz</p>
+            <p className="eyebrow">퀴즈</p>
             <h1 id="quiz-title">{quiz.question}</h1>
           </span>
           <button className="text-button" type="button" onClick={onClose}>
-            Close
+            닫기
           </button>
         </div>
         <div className="choice-list">
@@ -374,7 +396,7 @@ function QuizModal({
         </div>
         {quiz.status !== 'unsolved' && (
           <div className={quiz.status === 'correct' ? 'state-panel' : 'state-panel state-panel--error'}>
-            <strong>{quiz.status === 'correct' ? 'Correct' : 'Not quite'}</strong>
+            <strong>{quiz.status === 'correct' ? '정답이에요' : '아쉬워요'}</strong>
             <p>{quiz.explanation}</p>
           </div>
         )}
@@ -385,7 +407,7 @@ function QuizModal({
             onClick={() => selectedIndex !== null && onSubmit(quiz.id, selectedIndex)}
             disabled={selectedIndex === null}
           >
-            Submit answer
+            답 제출하기
           </button>
         )}
       </section>
@@ -435,7 +457,7 @@ function App() {
 
   async function createPig(sourceFileName: string, lectureText: string) {
     if (!user || lectureText.length < 20) {
-      setErrorMessage('Lecture text must be at least 20 characters.')
+      setErrorMessage('강의 텍스트는 최소 20자 이상이어야 합니다.')
       setDemoState('error')
       return
     }

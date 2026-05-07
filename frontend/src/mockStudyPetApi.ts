@@ -114,10 +114,10 @@ export async function answerQuiz(quizId: string, selectedIndex: number): Promise
 }
 
 export function getMoodMessage(mood: GuineaPig['mood']) {
-  if (mood === 'happy') return 'Correct! Your guinea pig is happily eating hay.'
-  if (mood === 'sad') return 'Not quite. Your guinea pig tilts its head.'
-  if (mood === 'levelup') return 'Level up! Your guinea pig has grown.'
-  return 'Your guinea pig is nibbling hay.'
+  if (mood === 'happy') return '정답이에요! 기니피그가 행복하게 건초를 먹고 있어요.'
+  if (mood === 'sad') return '조금 아쉬워요. 기니피그가 고개를 갸웃거려요.'
+  if (mood === 'levelup') return '레벨 업! 기니피그가 한 단계 성장했어요.'
+  return '기니피그가 건초를 오물오물 먹고 있어요.'
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

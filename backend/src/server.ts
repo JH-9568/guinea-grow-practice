@@ -296,15 +296,15 @@ function generateQuizzes(guineaPigId: string, lectureText: string, count: number
   return Array.from({ length: count }, (_unused, index) => ({
     id: `quiz_${quizSequence++}`,
     guineaPigId,
-    question: index === 0 ? `What is ${topic}?` : `Which answer best describes ${topic}?`,
+    question: index === 0 ? `${topic}은 무엇인가요?` : `${topic}을 가장 잘 설명한 답은 무엇인가요?`,
     choices: [
-      `${topic} is a key concept from the lecture material.`,
-      `${topic} is a storage device.`,
-      `${topic} is a login method.`,
-      `${topic} is unrelated to the lecture.`,
+      `${topic}은 이 강의 자료의 핵심 개념입니다.`,
+      `${topic}은 저장 장치의 한 종류입니다.`,
+      `${topic}은 로그인 방식입니다.`,
+      `${topic}은 이 강의와 관련이 없습니다.`,
     ],
     answerIndex: 0,
-    explanation: `${topic} was selected from the lecture text by the mock quiz generator.`,
+    explanation: `mock 퀴즈 생성기가 강의 텍스트에서 "${topic}"을 핵심 표현으로 선택했습니다.`,
     status: 'unsolved',
     selectedIndex: null,
   }))
