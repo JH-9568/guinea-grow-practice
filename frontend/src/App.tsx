@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import './App.css'
 import {
-  answerMockQuiz,
-  createMockGuineaPig,
-  createMockUser,
-  generateMockQuizzes,
+  answerQuiz,
+  createGuineaPig,
+  createUser,
+  generateQuizzes,
+  getGuineaPig,
+  getGuineaPigs,
+  getQuizzes,
   getMoodMessage,
-  summarizeGuineaPig,
   type GuineaPig,
+  type GuineaPigSummary,
   type Quiz,
   type User,
 } from './mockStudyPetApi'
@@ -55,7 +58,15 @@ function XpBar({ xp }: { xp: number }) {
   )
 }
 
-function StartScreen({ onStart }: { onStart: (nickname: string) => void }) {
+function StartScreen({
+  appState,
+  errorMessage,
+  onStart,
+}: {
+  appState: DemoState
+  errorMessage: string | null
+  onStart: (nickname: string) => void
+}) {
   const [nickname, setNickname] = useState('')
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -84,9 +95,15 @@ function StartScreen({ onStart }: { onStart: (nickname: string) => void }) {
               value={nickname}
             />
             <button className="primary-button" type="submit" disabled={!nickname.trim()}>
-              Start
+              {appState === 'loading' ? 'Starting' : 'Start'}
             </button>
           </div>
+          {appState === 'error' && errorMessage && (
+            <div className="state-panel state-panel--error">
+              <strong>Could not start</strong>
+              <p>{errorMessage}</p>
+            </div>
+          )}
         </form>
       </div>
       <GuineaPigVisual mood="idle" />
@@ -95,13 +112,17 @@ function StartScreen({ onStart }: { onStart: (nickname: string) => void }) {
 }
 
 function DashboardScreen({
-  records,
+  summaries,
   user,
+  appState,
+  errorMessage,
   onCreate,
   onOpenPig,
 }: {
-  records: PigRecord[]
+  summaries: GuineaPigSummary[]
   user: User
+  appState: DemoState
+  errorMessage: string | null
   onCreate: () => void
   onOpenPig: (id: string) => void
 }) {
@@ -117,7 +138,21 @@ function DashboardScreen({
         </button>
       </div>
 
-      {records.length === 0 ? (
+      {appState === 'loading' && (
+        <div className="state-panel state-panel--loading">
+          <span className="loader" />
+          <strong>Loading guinea pigs</strong>
+        </div>
+      )}
+
+      {appState === 'error' && errorMessage && (
+        <div className="state-panel state-panel--error">
+          <strong>Could not load dashboard</strong>
+          <p>{errorMessage}</p>
+        </div>
+      )}
+
+      {appState !== 'loading' && summaries.length === 0 ? (
         <div className="state-panel state-panel--large">
           <strong>No guinea pigs yet</strong>
           <p>Create your first study pet from a file name and lecture text.</p>
@@ -127,26 +162,23 @@ function DashboardScreen({
         </div>
       ) : (
         <div className="pig-grid">
-          {records.map(({ guineaPig, quizzes }) => {
-            const summary = summarizeGuineaPig(guineaPig, quizzes)
-            return (
-              <button
-                className="pig-card"
-                key={guineaPig.id}
-                type="button"
-                onClick={() => onOpenPig(guineaPig.id)}
-              >
-                <span className="pig-card__avatar" aria-hidden="true" />
-                <span>
-                  <strong>{summary.name}</strong>
-                  <small>{summary.sourceFileName}</small>
-                </span>
-                <span className="pig-card__stats">
-                  Lv. {summary.level} · {summary.stage} · {summary.unsolvedQuizCount} unsolved
-                </span>
-              </button>
-            )
-          })}
+          {summaries.map((summary) => (
+            <button
+              className="pig-card"
+              key={summary.id}
+              type="button"
+              onClick={() => onOpenPig(summary.id)}
+            >
+              <span className="pig-card__avatar" aria-hidden="true" />
+              <span>
+                <strong>{summary.name}</strong>
+                <small>{summary.sourceFileName}</small>
+              </span>
+              <span className="pig-card__stats">
+                Lv. {summary.level} · {summary.stage} · {summary.unsolvedQuizCount} unsolved
+              </span>
+            </button>
+          ))}
         </div>
       )}
     </section>
@@ -350,85 +382,128 @@ function QuizModal({
 function App() {
   const [screen, setScreen] = useState<Screen>('start')
   const [user, setUser] = useState<User | null>(null)
-  const [records, setRecords] = useState<PigRecord[]>([])
-  const [activePigId, setActivePigId] = useState<string | null>(null)
+  const [summaries, setSummaries] = useState<GuineaPigSummary[]>([])
+  const [activeRecord, setActiveRecord] = useState<PigRecord | null>(null)
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null)
   const [demoState, setDemoState] = useState<DemoState>('ready')
-
-  const activeRecord = useMemo(
-    () => records.find((record) => record.guineaPig.id === activePigId) ?? null,
-    [activePigId, records],
-  )
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const selectedQuiz =
     activeRecord?.quizzes.find((quiz) => quiz.id === selectedQuizId) ?? null
 
-  function start(nickname: string) {
-    setUser(createMockUser(nickname))
-    setScreen('dashboard')
+  async function start(nickname: string) {
+    setDemoState('loading')
+    setErrorMessage(null)
+
+    try {
+      const createdUser = await createUser(nickname)
+      setUser(createdUser)
+      await loadDashboard(createdUser.id)
+      setScreen('dashboard')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unknown error')
+      setDemoState('error')
+    }
   }
 
-  function createPig(sourceFileName: string, lectureText: string) {
+  async function loadDashboard(userId: string) {
+    setDemoState('loading')
+    setErrorMessage(null)
+
+    try {
+      const data = await getGuineaPigs(userId)
+      setSummaries(data)
+      setDemoState('ready')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unknown error')
+      setDemoState('error')
+    }
+  }
+
+  async function createPig(sourceFileName: string, lectureText: string) {
     if (!user || lectureText.length < 20) {
+      setErrorMessage('Lecture text must be at least 20 characters.')
       setDemoState('error')
       return
     }
 
     setDemoState('loading')
-    window.setTimeout(() => {
-      const result = createMockGuineaPig({ userId: user.id, sourceFileName, lectureText })
-      setRecords((current) => [...current, result])
-      setActivePigId(result.guineaPig.id)
+    setErrorMessage(null)
+
+    try {
+      const result = await createGuineaPig({ userId: user.id, sourceFileName, lectureText })
+      setActiveRecord(result)
       setSelectedQuizId(result.quizzes[0]?.id ?? null)
+      await loadDashboard(user.id)
       setDemoState('ready')
       setScreen('detail')
-    }, 240)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unknown error')
+      setDemoState('error')
+    }
   }
 
-  function openPig(id: string) {
-    const record = records.find((item) => item.guineaPig.id === id)
-    setActivePigId(id)
-    setSelectedQuizId(record?.quizzes[0]?.id ?? null)
-    setScreen('detail')
+  async function openPig(id: string) {
+    setDemoState('loading')
+    setErrorMessage(null)
+
+    try {
+      const [guineaPig, quizzes] = await Promise.all([getGuineaPig(id), getQuizzes(id)])
+      setActiveRecord({ guineaPig, quizzes })
+      setSelectedQuizId(quizzes[0]?.id ?? null)
+      setDemoState('ready')
+      setScreen('detail')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unknown error')
+      setDemoState('error')
+    }
   }
 
-  function generateMoreQuizzes() {
+  async function generateMore() {
     if (!activeRecord) return
-    setRecords((current) =>
-      current.map((record) =>
-        record.guineaPig.id === activeRecord.guineaPig.id
-          ? {
-              ...record,
-              quizzes: [
-                ...record.quizzes,
-                ...generateMockQuizzes(record.guineaPig.id, record.guineaPig.sourceFileName, 5),
-              ],
-            }
-          : record,
-      ),
-    )
+    setErrorMessage(null)
+
+    try {
+      const generated = await generateQuizzes(activeRecord.guineaPig.id, 5)
+      setActiveRecord({
+        ...activeRecord,
+        quizzes: [...activeRecord.quizzes, ...generated],
+      })
+      if (user) await loadDashboard(user.id)
+      setScreen('detail')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unknown error')
+      setDemoState('error')
+    }
   }
 
-  function submitAnswer(quizId: string, selectedIndex: number) {
+  async function submitAnswer(quizId: string, selectedIndex: number) {
     if (!activeRecord) return
     const quiz = activeRecord.quizzes.find((item) => item.id === quizId)
     if (!quiz || quiz.status !== 'unsolved') return
 
-    const result = answerMockQuiz({
-      guineaPig: activeRecord.guineaPig,
-      quiz,
-      selectedIndex,
-    })
-
-    setRecords((current) =>
-      current.map((record) =>
-        record.guineaPig.id === activeRecord.guineaPig.id
-          ? {
-              guineaPig: result.guineaPig,
-              quizzes: record.quizzes.map((item) => (item.id === quizId ? result.quiz : item)),
-            }
-          : record,
-      ),
-    )
+    try {
+      const result = await answerQuiz(quizId, selectedIndex)
+      setActiveRecord({
+        guineaPig: {
+          ...activeRecord.guineaPig,
+          ...result.guineaPig,
+        },
+        quizzes: activeRecord.quizzes.map((item) =>
+          item.id === quizId
+            ? {
+                ...item,
+                ...result.quiz,
+                explanation: result.explanation,
+              }
+            : item,
+        ),
+      })
+      if (user) await loadDashboard(user.id)
+      setScreen('detail')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unknown error')
+      setDemoState('error')
+    }
   }
 
   return (
@@ -441,11 +516,15 @@ function App() {
         {user && <span>{user.nickname}</span>}
       </nav>
 
-      {screen === 'start' && <StartScreen onStart={start} />}
+      {screen === 'start' && (
+        <StartScreen appState={demoState} errorMessage={errorMessage} onStart={start} />
+      )}
       {screen === 'dashboard' && user && (
         <DashboardScreen
-          records={records}
+          summaries={summaries}
           user={user}
+          appState={demoState}
+          errorMessage={errorMessage}
           onCreate={() => setScreen('create')}
           onOpenPig={openPig}
         />
@@ -461,8 +540,11 @@ function App() {
         <DetailScreen
           record={activeRecord}
           selectedQuiz={selectedQuiz}
-          onBack={() => setScreen('dashboard')}
-          onGenerateMore={generateMoreQuizzes}
+          onBack={() => {
+            if (user) void loadDashboard(user.id)
+            setScreen('dashboard')
+          }}
+          onGenerateMore={generateMore}
           onOpenQuiz={(quiz) => setSelectedQuizId(quiz.id)}
         />
       )}

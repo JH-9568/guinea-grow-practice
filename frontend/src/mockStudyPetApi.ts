@@ -34,19 +34,47 @@ export type Quiz = {
   selectedIndex: number | null
 }
 
-const names = ['Mochi', 'Nori', 'Bori', 'Pip', 'Coco']
-const colors: GuineaPig['color'][] = ['brown', 'white', 'cream', 'mixed']
-const personalities: GuineaPig['personality'][] = ['hungry', 'smart', 'shy', 'playful']
-
-export function createMockUser(nickname: string): User {
-  return {
-    id: 'user_1',
-    nickname,
-    createdAt: new Date().toISOString(),
-  }
+type ApiSuccess<T> = {
+  success: true
+  data: T
 }
 
-export function createMockGuineaPig({
+type ApiError = {
+  success: false
+  message: string
+}
+
+type CreateGuineaPigResponse = {
+  guineaPig: GuineaPig
+  quizzes: Quiz[]
+}
+
+type GenerateQuizzesResponse = {
+  quizzes: Quiz[]
+}
+
+type AnswerQuizResponse = {
+  quiz: Pick<Quiz, 'id' | 'status' | 'selectedIndex'>
+  isCorrect: boolean
+  gainedXp: number
+  guineaPig: Pick<GuineaPig, 'id' | 'level' | 'xp' | 'stage' | 'mood'>
+  explanation: string
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api'
+
+export async function createUser(nickname: string): Promise<User> {
+  return request<User>('/users', {
+    method: 'POST',
+    body: JSON.stringify({ nickname }),
+  })
+}
+
+export async function getGuineaPigs(userId: string): Promise<GuineaPigSummary[]> {
+  return request<GuineaPigSummary[]>(`/guinea-pigs?userId=${encodeURIComponent(userId)}`)
+}
+
+export async function createGuineaPig({
   userId,
   sourceFileName,
   lectureText,
@@ -54,93 +82,35 @@ export function createMockGuineaPig({
   userId: string
   sourceFileName: string
   lectureText: string
-}) {
-  const seed = sourceFileName.length + lectureText.length
-  const guineaPig: GuineaPig = {
-    id: `pig_${Date.now()}`,
-    userId,
-    name: names[seed % names.length] ?? 'Mochi',
-    sourceFileName,
-    color: colors[seed % colors.length] ?? 'brown',
-    personality: personalities[seed % personalities.length] ?? 'hungry',
-    level: 1,
-    xp: 0,
-    stage: 'baby',
-    mood: 'idle',
-    createdAt: new Date().toISOString(),
-  }
-
-  return {
-    guineaPig,
-    quizzes: generateMockQuizzes(guineaPig.id, lectureText, 5),
-  }
+}): Promise<CreateGuineaPigResponse> {
+  return request<CreateGuineaPigResponse>('/guinea-pigs', {
+    method: 'POST',
+    body: JSON.stringify({ userId, sourceFileName, lectureText }),
+  })
 }
 
-export function summarizeGuineaPig(guineaPig: GuineaPig, quizzes: Quiz[]): GuineaPigSummary {
-  return {
-    ...guineaPig,
-    quizCount: quizzes.length,
-    unsolvedQuizCount: quizzes.filter((quiz) => quiz.status === 'unsolved').length,
-  }
+export async function getGuineaPig(id: string): Promise<GuineaPig> {
+  return request<GuineaPig>(`/guinea-pigs/${id}`)
 }
 
-export function generateMockQuizzes(guineaPigId: string, lectureText: string, count: number): Quiz[] {
-  const topic = extractTopic(lectureText)
-  const nextIndex = Date.now().toString().slice(-4)
-
-  return Array.from({ length: count }, (_, index) => ({
-    id: `quiz_${nextIndex}_${index + 1}`,
-    guineaPigId,
-    question: `Which statement best matches the lecture note about ${topic}?`,
-    choices: [
-      `${topic} is the main concept explained in this lecture material.`,
-      `${topic} is unrelated to this lecture material.`,
-      'The lecture only contains administrative announcements.',
-      'The material cannot be reviewed with quizzes.',
-    ],
-    answerIndex: 0,
-    explanation: `The mock generator extracted "${topic}" as a key phrase from the lecture text.`,
-    status: 'unsolved',
-    selectedIndex: null,
-  }))
+export async function getQuizzes(guineaPigId: string): Promise<Quiz[]> {
+  return request<Quiz[]>(`/guinea-pigs/${guineaPigId}/quizzes`)
 }
 
-export function answerMockQuiz({
-  guineaPig,
-  quiz,
-  selectedIndex,
-}: {
-  guineaPig: GuineaPig
-  quiz: Quiz
-  selectedIndex: number
-}) {
-  const isCorrect = selectedIndex === quiz.answerIndex
-  const gainedXp = isCorrect ? 20 : 0
-  const nextXp = guineaPig.xp + gainedXp
-  const nextLevel = Math.floor(nextXp / 100) + 1
-  const didLevelUp = nextLevel > guineaPig.level
+export async function generateQuizzes(guineaPigId: string, count = 5): Promise<Quiz[]> {
+  const response = await request<GenerateQuizzesResponse>(`/guinea-pigs/${guineaPigId}/quizzes/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ count }),
+  })
 
-  const updatedQuiz: Quiz = {
-    ...quiz,
-    status: isCorrect ? 'correct' : 'wrong',
-    selectedIndex,
-  }
+  return response.quizzes
+}
 
-  const updatedGuineaPig: GuineaPig = {
-    ...guineaPig,
-    xp: nextXp,
-    level: nextLevel,
-    stage: getStage(nextLevel),
-    mood: didLevelUp ? 'levelup' : isCorrect ? 'happy' : 'sad',
-  }
-
-  return {
-    quiz: updatedQuiz,
-    isCorrect,
-    gainedXp,
-    guineaPig: updatedGuineaPig,
-    explanation: quiz.explanation,
-  }
+export async function answerQuiz(quizId: string, selectedIndex: number): Promise<AnswerQuizResponse> {
+  return request<AnswerQuizResponse>(`/quizzes/${quizId}/answer`, {
+    method: 'POST',
+    body: JSON.stringify({ selectedIndex }),
+  })
 }
 
 export function getMoodMessage(mood: GuineaPig['mood']) {
@@ -150,18 +120,19 @@ export function getMoodMessage(mood: GuineaPig['mood']) {
   return 'Your guinea pig is nibbling hay.'
 }
 
-function getStage(level: number): GuineaPig['stage'] {
-  if (level >= 4) return 'adult'
-  if (level === 3) return 'teen'
-  if (level === 2) return 'child'
-  return 'baby'
-}
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+  })
+  const payload = (await response.json()) as ApiSuccess<T> | ApiError
 
-function extractTopic(lectureText: string) {
-  const words = lectureText
-    .replace(/[^a-zA-Z0-9가-힣\s]/g, ' ')
-    .split(/\s+/)
-    .filter((word) => word.length > 3)
+  if (!payload.success) {
+    throw new Error(payload.message)
+  }
 
-  return words[0] ?? 'the lecture'
+  return payload.data
 }
